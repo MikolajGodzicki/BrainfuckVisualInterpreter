@@ -1,50 +1,68 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace BrainfuckVisualInterpreter {
     internal class Interpreter {
-        private const uint memorySize = 16;
+        private const uint memorySize = 64;
         List<Cell> cells = new List<Cell>((int)memorySize);
         public string input { get; private set; } = String.Empty;
         Lexer? lexer;
         private List<Tokens> tokens = new List<Tokens>();
         private int currentCellPosition = 0;
+        string memory = "";
 
         public Interpreter() {
-            Generate();
+            GenerateMemory();
         }
 
         public void Show() {
+            ClearMemory();
             Render();
             input = GetInput();
 
             lexer = new Lexer(input);
             tokens = lexer.tokens;
 
-            Interpret(tokens);
-            Console.WriteLine("Output: ");
+            Interpret();
+            Render();
+            WriteOutput();
         }
 
-        private void Generate() {
+        private void GenerateMemory() {
             for (int i = 0; i < memorySize; i++) {
                 cells.Add(new Cell(i, 0));
             }
         }
 
+        private void ClearMemory() {
+            for (int i = 0; i < memorySize; i++) {
+                cells[i].Value = 0;
+            }
+            currentCellPosition = 0;
+            memory = "";
+        }
+
         private void Render() {
             Console.Clear();
 
-            foreach (Cell cell in cells) {
-                Console.Write(cell.ToString());
-            }
+            RenderCells();
+            
             Console.WriteLine();
 
             Console.Write($"Current cell: {currentCellPosition}");
 
             Console.WriteLine();
+        }
+
+        private void RenderCells() {
+            foreach (Cell cell in cells) {
+                Console.Write(cell.ToString());
+            }
         }
 
         private string GetInput() {
@@ -53,34 +71,38 @@ namespace BrainfuckVisualInterpreter {
             return input == null ? String.Empty : input;
         }
 
-        private void Interpret(IEnumerable<Tokens> tokens) {
+        private void Interpret() {
             int idx = 0;
-            foreach (Tokens token in tokens) {
-                if (token == Tokens.MoveRight) {
+            for (int i = 0; i < tokens.Count; ++i) {
+                if (tokens[i] == Tokens.MoveRight) {
                     MoveRight();
                 }
 
-                else if (token == Tokens.MoveLeft) {
+                else if (tokens[i] == Tokens.MoveLeft) {
                     MoveLeft();
                 }
 
-                else if (token == Tokens.Add) {
+                else if (tokens[i] == Tokens.Add) {
                     Add();
                 }
 
-                else if (token == Tokens.Subtract) {
+                else if (tokens[i] == Tokens.Subtract) {
                     Substract();
                 }
 
-                else if (token == Tokens.LeftWhile) {
-                    While(idx);
+                else if (tokens[i] == Tokens.LeftWhile) {
+                    LeftWhile(ref i);
                 }
 
-                else if (token == Tokens.Out) {
+                else if (tokens[i] == Tokens.RightWhile) {
+                    RightWhile(ref i);
+                }
+
+                else if (tokens[i] == Tokens.Out) {
                     Out();
                 }
 
-                else if (token == Tokens.In) {
+                else if (tokens[i] == Tokens.In) {
                     In();
                 }
 
@@ -106,40 +128,57 @@ namespace BrainfuckVisualInterpreter {
             cells[currentCellPosition].Value--;
         }
 
-        private void While(int idx) {
-            List<Tokens> tokensToDo = new List<Tokens>();
-            int startIdx = idx;
-            int endIdx = startIdx;
+        private void LeftWhile(ref int idx) {
+            if (cells[currentCellPosition].Value == 0) {
+                int skip = 0;
+                int ptr = idx + 1;
+                while (input[ptr] != ']' || skip > 0) {
+                    if (input[ptr] == '[') {
+                        skip += 1;
+                    }
 
-            int tokensCount = tokens.Count;
+                    else if (input[ptr] == ']') {
+                        skip -= 1;
+                    }
 
-            //Get Index of right parenthesis
-            while (tokens[endIdx] != Tokens.RightWhile && endIdx < tokensCount - 1) {
-                endIdx++;
+                    ptr += 1;
+                    idx = ptr;
+                }
             }
+        }
 
-            //Add Instructions
-            for (int i = startIdx + 1; i < endIdx; i++) {
-                tokensToDo.Add(tokens[i]);
-            }
-            
-            //Do instructions while value of selected cell is greater than 0
-            while (cells[currentCellPosition].Value > 1) {
-                Interpret(tokensToDo);
+        private void RightWhile(ref int idx) {
+            if (cells[currentCellPosition].Value != 0) {
+                int skip = 0;
+                int ptr = idx - 1;
+                while (input[ptr] != '[' || skip > 0) {
+                    if (input[ptr] == ']') {
+                        skip += 1;
+                    }
+                    else if (input[ptr] == '[') {
+                        skip -= 1;
+                    }
+                    ptr -= 1;
+                    idx = ptr;
+                }
             }
         }
 
         private void Out() {
-            Console.WriteLine();
-            Console.WriteLine((char)cells[currentCellPosition].Value);
-            Console.Write("Click [Enter] to continue.");
-            Console.ReadLine();
+            memory += (char)cells[currentCellPosition].Value;
         }
 
         private void In() {
             Console.Write("Write your character: ");
             char key = Console.ReadKey().KeyChar;
             cells[currentCellPosition].Value = key;
+        }
+
+        public void WriteOutput() {
+            Console.WriteLine("Output: ");
+            Console.WriteLine(memory);
+            Console.WriteLine("Click [Enter] to continue");
+            Console.ReadKey();
         }
     }
 }
